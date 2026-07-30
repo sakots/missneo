@@ -55,6 +55,7 @@ pnpm run build
 ```
 
 ソースは `src/missneo.ts`、配信用ファイルは `missneo.js` です。
+画面下部へ表示するバージョン番号には `package.json` の `version` が使用され、ビルド時に自動で挿入されます。
 
 ## 更新履歴
 
@@ -62,4 +63,5 @@ pnpm run build
 
 - PaintBBS NEOのお絵描き画面と、PNGのクリップボード貼り付け機能を追加
 - 描画画面上部からのサイズ変更に対応（デフォルト400×400px）
+- 描画画面下部にmissneoのバージョン番号を表示
 - リポジトリ生やした

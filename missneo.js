@@ -9,6 +9,7 @@
     const DEFAULT_CANVAS_HEIGHT = 400;
     const MIN_CANVAS_SIZE = 100;
     const MAX_CANVAS_SIZE = 2000;
+    const MISSNEO_VERSION = "0.0.0";
     const missNeoWindow = window;
     const existingState = missNeoWindow[STATE_KEY];
     if (existingState) {
@@ -76,10 +77,13 @@
     status.setAttribute("aria-live", "polite");
     status.textContent =
         "描き終えたら NEO の「投稿」を押してください。PNG をノートへ渡します。";
+    const version = document.createElement("span");
+    version.id = "missneo-version";
+    version.textContent = `missneo v${MISSNEO_VERSION}`;
     heading.append(title, sizeForm);
     header.append(heading, closeButton);
     viewport.append(loading);
-    footer.append(status);
+    footer.append(status, version);
     panel.append(header, viewport, footer);
     overlay.append(panel);
     document.body.append(overlay);
@@ -634,6 +638,10 @@
       }
 
       #missneo-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
         min-height: 48px;
         padding: 11px 16px;
         box-sizing: border-box;
@@ -641,6 +649,13 @@
         color: #b8c6cd;
         font-size: 12px;
         line-height: 1.45;
+      }
+
+      #missneo-version {
+        flex: 0 0 auto;
+        color: #82939b;
+        font-size: 11px;
+        white-space: nowrap;
       }
 
       #missneo-status[data-kind="success"] {

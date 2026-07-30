@@ -4,7 +4,7 @@
   "description": "neo for misskey",
   "main": "missneo.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && cp build/missneo.js missneo.js",
+    "build": "tsc -p tsconfig.json && node scripts/inject-version.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "tsc -p tsconfig.json --noEmit"
   },
