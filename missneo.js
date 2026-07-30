@@ -262,6 +262,7 @@
         isCopying = true;
         setStatus("PNG をクリップボードへコピーしています…", "info");
         const neo = currentNeo;
+        leaveNeoWindowView(neo);
         const png = neo?.painter?.getPNG();
         if (!isBlob(png)) {
             setStatus("描画画像を PNG に変換できませんでした。", "error");
@@ -279,8 +280,9 @@
             isCopying = false;
             return;
         }
-        const noteTarget = resolveNoteTarget(noteTargetAtLaunch);
         state.close();
+        await nextAnimationFrame();
+        const noteTarget = resolveNoteTarget(noteTargetAtLaunch);
         const pasted = noteTarget ? dispatchImagePaste(noteTarget, png) : false;
         if (pasted) {
             showToast("画像をクリップボード経由でノートに貼り付けました。", "success");
@@ -291,6 +293,18 @@
         }
         neo?.submitButton?.enable();
         isCopying = false;
+    }
+    function leaveNeoWindowView(neo) {
+        if (!neo?.fullScreen) {
+            return;
+        }
+        neo.fullScreen = false;
+        neo.updateWindow?.();
+    }
+    function nextAnimationFrame() {
+        return new Promise((resolve) => {
+            window.requestAnimationFrame(() => resolve());
+        });
     }
     function writePngToClipboard(png) {
         const ClipboardItemConstructor = missNeoWindow.ClipboardItem ?? globalThis.ClipboardItem;

@@ -26,9 +26,11 @@
     params: Record<string, Record<string, string | number | boolean>>;
     painter?: NeoPainter;
     submitButton?: NeoButton | null;
+    fullScreen?: boolean;
     init(): boolean;
     start(): void;
     setStabilizeLevel?(level: number): void;
+    updateWindow?(): void;
   }
 
   interface NeoFrameDocument extends Document {
@@ -400,6 +402,7 @@
     setStatus("PNG をクリップボードへコピーしています…", "info");
 
     const neo = currentNeo;
+    leaveNeoWindowView(neo);
     const png = neo?.painter?.getPNG();
 
     if (!isBlob(png)) {
@@ -425,8 +428,9 @@
       return;
     }
 
-    const noteTarget = resolveNoteTarget(noteTargetAtLaunch);
     state.close();
+    await nextAnimationFrame();
+    const noteTarget = resolveNoteTarget(noteTargetAtLaunch);
     const pasted = noteTarget ? dispatchImagePaste(noteTarget, png) : false;
 
     if (pasted) {
@@ -442,6 +446,21 @@
 
     neo?.submitButton?.enable();
     isCopying = false;
+  }
+
+  function leaveNeoWindowView(neo: NeoApi | null): void {
+    if (!neo?.fullScreen) {
+      return;
+    }
+
+    neo.fullScreen = false;
+    neo.updateWindow?.();
+  }
+
+  function nextAnimationFrame(): Promise<void> {
+    return new Promise((resolve) => {
+      window.requestAnimationFrame(() => resolve());
+    });
   }
 
   function writePngToClipboard(png: Blob): Promise<void> {
