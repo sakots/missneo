@@ -9,7 +9,7 @@
     const DEFAULT_CANVAS_HEIGHT = 400;
     const MIN_CANVAS_SIZE = 100;
     const MAX_CANVAS_SIZE = 2000;
-    const MISSNEO_VERSION = "0.0.0";
+    const MISSNEO_VERSION = "0.0.1";
     const missNeoWindow = window;
     const existingState = missNeoWindow[STATE_KEY];
     if (existingState) {
