@@ -7,6 +7,10 @@
   const SCRIPT_ID = "missneo-neo-script";
   const NEO_STYLE_ID = "missneo-neo-style";
   const APP_STYLE_ID = "missneo-style";
+  const DEFAULT_CANVAS_WIDTH = 400;
+  const DEFAULT_CANVAS_HEIGHT = 400;
+  const MIN_CANVAS_SIZE = 100;
+  const MAX_CANVAS_SIZE = 2000;
 
   type PaintBBSCallback = (value: string) => unknown;
 
@@ -55,9 +59,6 @@
 
   const originalCallback = missNeoDocument.paintBBSCallback;
   const noteTargetAtLaunch = findNoteTarget();
-  const canvasSize = chooseCanvasSize();
-  const appletWidth = canvasSize + 100;
-  const appletHeight = canvasSize + 160;
   let isCopying = false;
 
   addApplicationStyle();
@@ -83,7 +84,7 @@
   title.textContent = "PaintBBS NEO";
 
   const subtitle = document.createElement("span");
-  subtitle.textContent = `${canvasSize} × ${canvasSize}px`;
+  subtitle.textContent = `${DEFAULT_CANVAS_WIDTH} × ${DEFAULT_CANVAS_HEIGHT}px`;
 
   const closeButton = document.createElement("button");
   closeButton.id = "missneo-close";
@@ -94,15 +95,64 @@
   const viewport = document.createElement("div");
   viewport.id = "missneo-viewport";
 
+  const sizeForm = document.createElement("form");
+  sizeForm.id = "missneo-size-form";
+
+  const sizeTitle = document.createElement("strong");
+  sizeTitle.textContent = "描画サイズ";
+
+  const sizeDescription = document.createElement("p");
+  sizeDescription.textContent = `${MIN_CANVAS_SIZE}〜${MAX_CANVAS_SIZE}pxの範囲で指定できます。`;
+
+  const sizeFields = document.createElement("div");
+  sizeFields.id = "missneo-size-fields";
+
+  const widthLabel = document.createElement("label");
+  widthLabel.htmlFor = "missneo-canvas-width";
+  widthLabel.textContent = "横";
+
+  const widthInput = createSizeInput(
+    "missneo-canvas-width",
+    DEFAULT_CANVAS_WIDTH,
+  );
+
+  const separator = document.createElement("span");
+  separator.id = "missneo-size-separator";
+  separator.textContent = "×";
+  separator.setAttribute("aria-hidden", "true");
+
+  const heightLabel = document.createElement("label");
+  heightLabel.htmlFor = "missneo-canvas-height";
+  heightLabel.textContent = "縦";
+
+  const heightInput = createSizeInput(
+    "missneo-canvas-height",
+    DEFAULT_CANVAS_HEIGHT,
+  );
+
+  const startButton = document.createElement("button");
+  startButton.id = "missneo-start";
+  startButton.type = "submit";
+  startButton.textContent = "お絵描きを始める";
+
+  sizeFields.append(
+    widthLabel,
+    widthInput,
+    separator,
+    heightLabel,
+    heightInput,
+  );
+  sizeForm.append(sizeTitle, sizeDescription, sizeFields, startButton);
+
   const loading = document.createElement("div");
   loading.id = "missneo-loading";
   loading.setAttribute("role", "status");
   loading.textContent = "PaintBBS NEO を読み込んでいます…";
+  loading.hidden = true;
 
   const applet = document.createElement("div");
   applet.className = "neo-applet-paintbbs";
-  applet.dataset.width = String(appletWidth);
-  applet.dataset.height = String(appletHeight);
+  applet.hidden = true;
 
   const footer = document.createElement("footer");
   footer.id = "missneo-footer";
@@ -111,12 +161,11 @@
   status.id = "missneo-status";
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
-  status.textContent =
-    "描き終えたら NEO の「投稿」を押してください。PNG をノートへ渡します。";
+  status.textContent = "描画する画像の横幅と縦幅を入力してください。";
 
   heading.append(title, subtitle);
   header.append(heading, closeButton);
-  viewport.append(loading, applet);
+  viewport.append(sizeForm, loading, applet);
   footer.append(status);
   panel.append(header, viewport, footer);
   overlay.append(panel);
@@ -126,7 +175,12 @@
     open() {
       overlay.hidden = false;
       document.documentElement.classList.add("missneo-open");
-      closeButton.focus({ preventScroll: true });
+      if (sizeForm.isConnected && !sizeForm.hidden) {
+        widthInput.focus({ preventScroll: true });
+        widthInput.select();
+      } else {
+        closeButton.focus({ preventScroll: true });
+      }
     },
     close() {
       overlay.hidden = true;
@@ -168,15 +222,49 @@
     return originalCallback?.(value);
   };
 
-  void startNeo();
+  sizeForm.addEventListener("submit", (event) => {
+    event.preventDefault();
 
-  async function startNeo(): Promise<void> {
+    const canvasWidth = readCanvasSize(widthInput);
+    const canvasHeight = readCanvasSize(heightInput);
+    if (canvasWidth === null || canvasHeight === null) {
+      sizeForm.reportValidity();
+      return;
+    }
+
+    startButton.disabled = true;
+    widthInput.disabled = true;
+    heightInput.disabled = true;
+    void startNeo(canvasWidth, canvasHeight);
+  });
+
+  async function startNeo(
+    canvasWidth: number,
+    canvasHeight: number,
+  ): Promise<void> {
+    const appletWidth = canvasWidth + 100;
+    const appletHeight = canvasHeight + 160;
+    subtitle.textContent = `${canvasWidth} × ${canvasHeight}px`;
+    panel.style.setProperty(
+      "--missneo-panel-width",
+      `${appletWidth + 32}px`,
+    );
+    applet.dataset.width = String(appletWidth);
+    applet.dataset.height = String(appletHeight);
+    sizeForm.hidden = true;
+    loading.hidden = false;
+    applet.hidden = false;
+    setStatus(
+      "描き終えたら NEO の「投稿」を押してください。PNG をノートへ渡します。",
+      "info",
+    );
+
     try {
       const neo = await loadNeo();
       neo.params = {
         paintbbs: {
-          image_width: canvasSize,
-          image_height: canvasSize,
+          image_width: canvasWidth,
+          image_height: canvasHeight,
           neo_show_right_button: true,
           neo_disable_grid_touch_move: true,
           neo_disable_turn_original_glitch: true,
@@ -374,11 +462,34 @@
     target.focus({ preventScroll: true });
   }
 
-  function chooseCanvasSize(): number {
-    const availableWidth = window.innerWidth - 135;
-    const availableHeight = window.innerHeight - 245;
-    const size = Math.floor(Math.min(400, availableWidth, availableHeight) / 10) * 10;
-    return Math.max(150, size);
+  function createSizeInput(
+    id: string,
+    defaultValue: number,
+  ): HTMLInputElement {
+    const input = document.createElement("input");
+    input.id = id;
+    input.type = "number";
+    input.inputMode = "numeric";
+    input.min = String(MIN_CANVAS_SIZE);
+    input.max = String(MAX_CANVAS_SIZE);
+    input.step = "1";
+    input.required = true;
+    input.value = String(defaultValue);
+    return input;
+  }
+
+  function readCanvasSize(input: HTMLInputElement): number | null {
+    const value = input.valueAsNumber;
+    const isValid =
+      Number.isInteger(value) &&
+      value >= MIN_CANVAS_SIZE &&
+      value <= MAX_CANVAS_SIZE;
+    input.setCustomValidity(
+      isValid
+        ? ""
+        : `${MIN_CANVAS_SIZE}〜${MAX_CANVAS_SIZE}の整数を入力してください。`,
+    );
+    return isValid ? value : null;
   }
 
   function createFileName(): string {
@@ -484,7 +595,7 @@
       #missneo-panel {
         display: grid;
         grid-template-rows: auto minmax(0, 1fr) auto;
-        width: min(100%, ${appletWidth + 32}px);
+        width: min(100%, var(--missneo-panel-width, 520px));
         max-height: calc(100dvh - 24px);
         overflow: hidden;
         border: 1px solid rgb(255 255 255 / 14%);
@@ -543,6 +654,89 @@
         overflow: auto;
         overscroll-behavior: contain;
         background: #11181c;
+      }
+
+      #missneo-size-form {
+        display: grid;
+        gap: 18px;
+        justify-items: center;
+        min-height: 260px;
+        padding: 34px 24px;
+        box-sizing: border-box;
+        background: #182126;
+      }
+
+      #missneo-size-form > strong {
+        font-size: 18px;
+      }
+
+      #missneo-size-form > p {
+        margin: -10px 0 0;
+        color: #9fb0b9;
+        font-size: 12px;
+      }
+
+      #missneo-size-fields {
+        display: grid;
+        grid-template-columns: auto minmax(82px, 120px) auto auto minmax(82px, 120px);
+        align-items: center;
+        gap: 8px;
+      }
+
+      #missneo-size-fields label {
+        color: #c7d3d9;
+        font-size: 13px;
+      }
+
+      #missneo-size-fields input {
+        width: 100%;
+        padding: 9px 10px;
+        box-sizing: border-box;
+        border: 1px solid rgb(255 255 255 / 18%);
+        border-radius: 8px;
+        outline: none;
+        background: #10171b;
+        color: #edf5f8;
+        font: inherit;
+        text-align: right;
+      }
+
+      #missneo-size-fields input:focus {
+        border-color: #8ac900;
+        box-shadow: 0 0 0 2px rgb(138 201 0 / 20%);
+      }
+
+      #missneo-size-separator {
+        color: #82939b;
+      }
+
+      #missneo-start {
+        min-width: 180px;
+        padding: 10px 18px;
+        border: 0;
+        border-radius: 9px;
+        background: #8ac900;
+        color: #172000;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      #missneo-start:hover,
+      #missneo-start:focus-visible {
+        filter: brightness(1.08);
+        outline: none;
+      }
+
+      #missneo-start:disabled {
+        cursor: wait;
+        opacity: 0.55;
+      }
+
+      #missneo-size-form[hidden],
+      #missneo-loading[hidden],
+      #missneo-viewport > .neo-applet-paintbbs[hidden] {
+        display: none !important;
       }
 
       #missneo-viewport > .NEO {
