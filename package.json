@@ -4,7 +4,9 @@
   "description": "neo for misskey",
   "main": "missneo.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc -p tsconfig.json && cp build/missneo.js missneo.js",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.json --noEmit"
   },
   "keywords": [],
   "author": "",
