@@ -4,8 +4,6 @@
   const NEO_SCRIPT_URL = "https://neo.sakots.net/neo/dist/neo.js";
   const NEO_STYLE_URL = "https://neo.sakots.net/neo/dist/neo.css";
   const STATE_KEY = "__missneoState__";
-  const SCRIPT_ID = "missneo-neo-script";
-  const NEO_STYLE_ID = "missneo-neo-style";
   const APP_STYLE_ID = "missneo-style";
   const DEFAULT_CANVAS_WIDTH = 400;
   const DEFAULT_CANVAS_HEIGHT = 400;
@@ -16,6 +14,7 @@
 
   interface NeoPainter {
     getPNG(): Blob | null;
+    isDirty?(): boolean;
   }
 
   interface NeoButton {
@@ -31,12 +30,15 @@
     setStabilizeLevel?(level: number): void;
   }
 
-  interface MissNeoDocument extends Document {
+  interface NeoFrameDocument extends Document {
     paintBBSCallback?: PaintBBSCallback;
   }
 
-  interface MissNeoWindow extends Window {
+  interface NeoFrameWindow extends Window {
     Neo?: NeoApi;
+  }
+
+  interface MissNeoWindow extends Window {
     ClipboardItem?: typeof ClipboardItem;
     [STATE_KEY]?: MissNeoState;
   }
@@ -49,7 +51,6 @@
   type MessageKind = "info" | "success" | "error";
 
   const missNeoWindow = window as MissNeoWindow;
-  const missNeoDocument = document as MissNeoDocument;
   const existingState = missNeoWindow[STATE_KEY];
 
   if (existingState) {
@@ -57,12 +58,15 @@
     return;
   }
 
-  const originalCallback = missNeoDocument.paintBBSCallback;
   const noteTargetAtLaunch = findNoteTarget();
+  let currentNeo: NeoApi | null = null;
+  let currentFrame: HTMLIFrameElement | null = null;
+  let currentCanvasWidth = DEFAULT_CANVAS_WIDTH;
+  let currentCanvasHeight = DEFAULT_CANVAS_HEIGHT;
+  let mountGeneration = 0;
   let isCopying = false;
 
   addApplicationStyle();
-  addNeoStyle();
 
   const overlay = document.createElement("div");
   overlay.id = "missneo-overlay";
@@ -83,29 +87,9 @@
   title.id = "missneo-title";
   title.textContent = "PaintBBS NEO";
 
-  const subtitle = document.createElement("span");
-  subtitle.textContent = `${DEFAULT_CANVAS_WIDTH} × ${DEFAULT_CANVAS_HEIGHT}px`;
-
-  const closeButton = document.createElement("button");
-  closeButton.id = "missneo-close";
-  closeButton.type = "button";
-  closeButton.setAttribute("aria-label", "お絵描き画面を閉じる");
-  closeButton.textContent = "×";
-
-  const viewport = document.createElement("div");
-  viewport.id = "missneo-viewport";
-
   const sizeForm = document.createElement("form");
   sizeForm.id = "missneo-size-form";
-
-  const sizeTitle = document.createElement("strong");
-  sizeTitle.textContent = "描画サイズ";
-
-  const sizeDescription = document.createElement("p");
-  sizeDescription.textContent = `${MIN_CANVAS_SIZE}〜${MAX_CANVAS_SIZE}pxの範囲で指定できます。`;
-
-  const sizeFields = document.createElement("div");
-  sizeFields.id = "missneo-size-fields";
+  sizeForm.setAttribute("aria-label", "描画サイズ");
 
   const widthLabel = document.createElement("label");
   widthLabel.htmlFor = "missneo-canvas-width";
@@ -130,29 +114,33 @@
     DEFAULT_CANVAS_HEIGHT,
   );
 
-  const startButton = document.createElement("button");
-  startButton.id = "missneo-start";
-  startButton.type = "submit";
-  startButton.textContent = "お絵描きを始める";
+  const resizeButton = document.createElement("button");
+  resizeButton.id = "missneo-resize";
+  resizeButton.type = "submit";
+  resizeButton.textContent = "変更";
 
-  sizeFields.append(
+  sizeForm.append(
     widthLabel,
     widthInput,
     separator,
     heightLabel,
     heightInput,
+    resizeButton,
   );
-  sizeForm.append(sizeTitle, sizeDescription, sizeFields, startButton);
+
+  const closeButton = document.createElement("button");
+  closeButton.id = "missneo-close";
+  closeButton.type = "button";
+  closeButton.setAttribute("aria-label", "お絵描き画面を閉じる");
+  closeButton.textContent = "×";
+
+  const viewport = document.createElement("div");
+  viewport.id = "missneo-viewport";
 
   const loading = document.createElement("div");
   loading.id = "missneo-loading";
   loading.setAttribute("role", "status");
   loading.textContent = "PaintBBS NEO を読み込んでいます…";
-  loading.hidden = true;
-
-  const applet = document.createElement("div");
-  applet.className = "neo-applet-paintbbs";
-  applet.hidden = true;
 
   const footer = document.createElement("footer");
   footer.id = "missneo-footer";
@@ -161,11 +149,12 @@
   status.id = "missneo-status";
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
-  status.textContent = "描画する画像の横幅と縦幅を入力してください。";
+  status.textContent =
+    "描き終えたら NEO の「投稿」を押してください。PNG をノートへ渡します。";
 
-  heading.append(title, subtitle);
+  heading.append(title, sizeForm);
   header.append(heading, closeButton);
-  viewport.append(sizeForm, loading, applet);
+  viewport.append(loading);
   footer.append(status);
   panel.append(header, viewport, footer);
   overlay.append(panel);
@@ -213,15 +202,6 @@
     }
   });
 
-  missNeoDocument.paintBBSCallback = (value: string) => {
-    if (value === "check") {
-      void copyAndPasteDrawing();
-      return false;
-    }
-
-    return originalCallback?.(value);
-  };
-
   sizeForm.addEventListener("submit", (event) => {
     event.preventDefault();
 
@@ -232,35 +212,156 @@
       return;
     }
 
-    startButton.disabled = true;
-    widthInput.disabled = true;
-    heightInput.disabled = true;
-    void startNeo(canvasWidth, canvasHeight);
+    if (
+      canvasWidth === currentCanvasWidth &&
+      canvasHeight === currentCanvasHeight
+    ) {
+      return;
+    }
+
+    if (
+      (currentNeo?.painter?.isDirty?.() ?? false) &&
+      !window.confirm(
+        "描画サイズを変更すると、現在の描画内容は消去されます。よろしいですか？",
+      )
+    ) {
+      widthInput.value = String(currentCanvasWidth);
+      heightInput.value = String(currentCanvasHeight);
+      return;
+    }
+
+    void mountNeo(canvasWidth, canvasHeight);
   });
 
-  async function startNeo(
+  void mountNeo(DEFAULT_CANVAS_WIDTH, DEFAULT_CANVAS_HEIGHT);
+
+  async function mountNeo(
     canvasWidth: number,
     canvasHeight: number,
   ): Promise<void> {
+    const generation = ++mountGeneration;
     const appletWidth = canvasWidth + 100;
     const appletHeight = canvasHeight + 160;
-    subtitle.textContent = `${canvasWidth} × ${canvasHeight}px`;
+
+    resizeButton.disabled = true;
+    currentNeo = null;
+    currentFrame?.remove();
+    currentFrame = null;
+    loading.hidden = false;
+    loading.dataset.kind = "";
+    loading.textContent = "PaintBBS NEO を読み込んでいます…";
     panel.style.setProperty(
       "--missneo-panel-width",
       `${appletWidth + 32}px`,
     );
-    applet.dataset.width = String(appletWidth);
-    applet.dataset.height = String(appletHeight);
-    sizeForm.hidden = true;
-    loading.hidden = false;
-    applet.hidden = false;
-    setStatus(
-      "描き終えたら NEO の「投稿」を押してください。PNG をノートへ渡します。",
-      "info",
-    );
 
     try {
-      const neo = await loadNeo();
+      const { frame, neo } = await createNeoFrame(
+        canvasWidth,
+        canvasHeight,
+        appletWidth,
+        appletHeight,
+      );
+
+      if (generation !== mountGeneration) {
+        frame.remove();
+        return;
+      }
+
+      currentCanvasWidth = canvasWidth;
+      currentCanvasHeight = canvasHeight;
+      currentFrame = frame;
+      currentNeo = neo;
+      widthInput.value = String(canvasWidth);
+      heightInput.value = String(canvasHeight);
+      loading.hidden = true;
+      frame.style.visibility = "visible";
+      resizeButton.disabled = false;
+      setStatus(
+        "描き終えたら NEO の「投稿」を押してください。PNG をノートへ渡します。",
+        "info",
+      );
+    } catch (error) {
+      if (generation !== mountGeneration) {
+        return;
+      }
+
+      loading.textContent = messageFromError(error);
+      loading.dataset.kind = "error";
+      resizeButton.disabled = false;
+      setStatus(
+        "読み込みに失敗しました。ネットワーク接続を確認して、ページを再読み込みしてください。",
+        "error",
+      );
+    }
+  }
+
+  async function createNeoFrame(
+    canvasWidth: number,
+    canvasHeight: number,
+    appletWidth: number,
+    appletHeight: number,
+  ): Promise<{ frame: HTMLIFrameElement; neo: NeoApi }> {
+    const frame = document.createElement("iframe");
+    frame.className = "missneo-frame";
+    frame.title = `PaintBBS NEO ${canvasWidth} × ${canvasHeight}px`;
+    frame.width = String(appletWidth);
+    frame.height = String(appletHeight);
+    frame.style.visibility = "hidden";
+    viewport.append(frame);
+
+    const frameWindow = frame.contentWindow as NeoFrameWindow | null;
+    const frameDocument = frame.contentDocument as NeoFrameDocument | null;
+
+    if (!frameWindow || !frameDocument) {
+      frame.remove();
+      throw new Error("お絵描き画面を作成できませんでした。");
+    }
+
+    frameDocument.documentElement.lang = "ja";
+    frameDocument.title = frame.title;
+    frameDocument.body.style.margin = "0";
+    frameDocument.body.style.overflow = "hidden";
+
+    const neoStyle = frameDocument.createElement("link");
+    neoStyle.rel = "stylesheet";
+    neoStyle.href = NEO_STYLE_URL;
+
+    const applet = frameDocument.createElement("div");
+    applet.className = "neo-applet-paintbbs";
+    applet.dataset.width = String(appletWidth);
+    applet.dataset.height = String(appletHeight);
+
+    const styleLoaded = waitForStylesheet(neoStyle);
+    frameDocument.head.append(neoStyle);
+    frameDocument.body.append(applet);
+    frameDocument.paintBBSCallback = (value: string) => {
+      if (value === "check") {
+        void copyAndPasteDrawing();
+        return false;
+      }
+      return undefined;
+    };
+    frameDocument.addEventListener(
+      "dblclick",
+      (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      },
+      { passive: false },
+    );
+    frameDocument.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        state.close();
+      }
+    });
+
+    try {
+      const [neo] = await Promise.all([
+        loadNeoInFrame(frameDocument, frameWindow),
+        styleLoaded,
+      ]);
       neo.params = {
         paintbbs: {
           image_width: canvasWidth,
@@ -278,14 +379,10 @@
 
       neo.start();
       neo.setStabilizeLevel?.(1);
-      loading.remove();
+      return { frame, neo };
     } catch (error) {
-      loading.textContent = messageFromError(error);
-      loading.dataset.kind = "error";
-      setStatus(
-        "読み込みに失敗しました。ネットワーク接続を確認して、ページを再読み込みしてください。",
-        "error",
-      );
+      frame.remove();
+      throw error;
     }
   }
 
@@ -297,10 +394,10 @@
     isCopying = true;
     setStatus("PNG をクリップボードへコピーしています…", "info");
 
-    const neo = missNeoWindow.Neo;
+    const neo = currentNeo;
     const png = neo?.painter?.getPNG();
 
-    if (!(png instanceof Blob)) {
+    if (!isBlob(png)) {
       setStatus("描画画像を PNG に変換できませんでした。", "error");
       neo?.submitButton?.enable();
       isCopying = false;
@@ -508,17 +605,13 @@
     ].join("");
   }
 
-  function loadNeo(): Promise<NeoApi> {
-    const currentNeo = missNeoWindow.Neo;
-    if (isNeoApi(currentNeo)) {
-      return Promise.resolve(currentNeo);
-    }
-
+  function loadNeoInFrame(
+    frameDocument: NeoFrameDocument,
+    frameWindow: NeoFrameWindow,
+  ): Promise<NeoApi> {
     return new Promise((resolve, reject) => {
-      let script = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
-
       const handleLoad = () => {
-        const neo = missNeoWindow.Neo;
+        const neo = frameWindow.Neo;
         if (isNeoApi(neo)) {
           resolve(neo);
         } else {
@@ -529,16 +622,26 @@
         reject(new Error("PaintBBS NEO のスクリプトを読み込めませんでした。"));
       };
 
-      if (!script) {
-        script = document.createElement("script");
-        script.id = SCRIPT_ID;
-        script.src = NEO_SCRIPT_URL;
-        script.charset = "UTF-8";
-        document.head.append(script);
-      }
-
+      const script = frameDocument.createElement("script");
+      script.src = NEO_SCRIPT_URL;
+      script.charset = "UTF-8";
       script.addEventListener("load", handleLoad, { once: true });
       script.addEventListener("error", handleError, { once: true });
+      frameDocument.head.append(script);
+    });
+  }
+
+  function waitForStylesheet(link: HTMLLinkElement): Promise<void> {
+    return new Promise((resolve, reject) => {
+      link.addEventListener("load", () => resolve(), { once: true });
+      link.addEventListener(
+        "error",
+        () =>
+          reject(
+            new Error("PaintBBS NEO のスタイルを読み込めませんでした。"),
+          ),
+        { once: true },
+      );
     });
   }
 
@@ -550,16 +653,13 @@
     );
   }
 
-  function addNeoStyle(): void {
-    if (document.getElementById(NEO_STYLE_ID)) {
-      return;
-    }
-
-    const link = document.createElement("link");
-    link.id = NEO_STYLE_ID;
-    link.rel = "stylesheet";
-    link.href = NEO_STYLE_URL;
-    document.head.append(link);
+  function isBlob(value: Blob | null | undefined): value is Blob {
+    return Boolean(
+      value &&
+        typeof value === "object" &&
+        typeof value.arrayBuffer === "function" &&
+        value.type === "image/png",
+    );
   }
 
   function addApplicationStyle(): void {
@@ -608,6 +708,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
+        gap: 12px;
         min-height: 54px;
         padding: 8px 10px 8px 18px;
         box-sizing: border-box;
@@ -616,17 +717,14 @@
 
       #missneo-heading {
         display: flex;
-        align-items: baseline;
-        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        min-width: 0;
       }
 
       #missneo-title {
         font-size: 16px;
-      }
-
-      #missneo-heading span {
-        color: #9fb0b9;
-        font-size: 12px;
       }
 
       #missneo-close {
@@ -651,104 +749,90 @@
 
       #missneo-viewport {
         position: relative;
+        min-height: 180px;
         overflow: auto;
         overscroll-behavior: contain;
         background: #11181c;
       }
 
       #missneo-size-form {
-        display: grid;
-        gap: 18px;
-        justify-items: center;
-        min-height: 260px;
-        padding: 34px 24px;
-        box-sizing: border-box;
-        background: #182126;
-      }
-
-      #missneo-size-form > strong {
-        font-size: 18px;
-      }
-
-      #missneo-size-form > p {
-        margin: -10px 0 0;
-        color: #9fb0b9;
-        font-size: 12px;
-      }
-
-      #missneo-size-fields {
-        display: grid;
-        grid-template-columns: auto minmax(82px, 120px) auto auto minmax(82px, 120px);
+        display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
       }
 
-      #missneo-size-fields label {
-        color: #c7d3d9;
-        font-size: 13px;
+      #missneo-size-form label {
+        color: #9fb0b9;
+        font-size: 11px;
       }
 
-      #missneo-size-fields input {
-        width: 100%;
-        padding: 9px 10px;
+      #missneo-size-form input {
+        width: 72px;
+        padding: 6px 7px;
         box-sizing: border-box;
         border: 1px solid rgb(255 255 255 / 18%);
-        border-radius: 8px;
+        border-radius: 7px;
         outline: none;
         background: #10171b;
         color: #edf5f8;
         font: inherit;
+        font-size: 13px;
         text-align: right;
       }
 
-      #missneo-size-fields input:focus {
+      #missneo-size-form input:focus {
         border-color: #8ac900;
         box-shadow: 0 0 0 2px rgb(138 201 0 / 20%);
       }
 
       #missneo-size-separator {
         color: #82939b;
+        font-size: 12px;
       }
 
-      #missneo-start {
-        min-width: 180px;
-        padding: 10px 18px;
+      #missneo-resize {
+        padding: 6px 10px;
         border: 0;
-        border-radius: 9px;
+        border-radius: 7px;
         background: #8ac900;
         color: #172000;
         font: inherit;
+        font-size: 12px;
         font-weight: 700;
         cursor: pointer;
       }
 
-      #missneo-start:hover,
-      #missneo-start:focus-visible {
+      #missneo-resize:hover,
+      #missneo-resize:focus-visible {
         filter: brightness(1.08);
         outline: none;
       }
 
-      #missneo-start:disabled {
+      #missneo-resize:disabled {
         cursor: wait;
         opacity: 0.55;
       }
 
-      #missneo-size-form[hidden],
-      #missneo-loading[hidden],
-      #missneo-viewport > .neo-applet-paintbbs[hidden] {
+      #missneo-loading[hidden] {
         display: none !important;
       }
 
-      #missneo-viewport > .NEO {
+      #missneo-viewport > .missneo-frame {
+        display: block;
         margin: 0 auto !important;
+        border: 0;
+        background: #11181c;
       }
 
       #missneo-loading {
         display: grid;
-        min-height: 180px;
+        position: absolute;
+        inset: 0;
+        z-index: 1;
         place-items: center;
         padding: 24px;
         box-sizing: border-box;
+        background: #11181c;
         color: #c7d3d9;
         text-align: center;
       }
@@ -807,6 +891,22 @@
           max-height: 100dvh;
           border: 0;
           border-radius: 0;
+        }
+
+        #missneo-header {
+          align-items: flex-start;
+        }
+
+        #missneo-heading {
+          gap: 7px 10px;
+        }
+
+        #missneo-title {
+          width: 100%;
+        }
+
+        #missneo-size-form input {
+          width: 62px;
         }
       }
     `;
