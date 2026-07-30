@@ -7,6 +7,7 @@
 ![できた](images/about.png)
 
 misskeyにPaintBBS NEOでお絵描きするブックマークレットです。
+Codex使用
 
 PaintBBS NEO: [funige/neo](https://github.com/funige/neo/tree/master)
 
@@ -27,6 +28,7 @@ javascript:(function(){const s=document.createElement('script');s.charset='UTF-8
 5. 対応するMisskeyでは画像がノートへ貼り付けられます。自動で貼り付けられなかった場合は、フォーカスされたノート欄で `Ctrl+V`（Macは `⌘V`）を押してください。
 
 画像のクリップボード書き込みには、HTTPSで配信されたMisskeyと、画像のClipboard APIに対応したブラウザが必要です。(google chromeとmicrosoft edgeは対応しています。)
+通常のノート作成画面に加えて、チャンネルの固定投稿欄とチャンネル投稿ダイアログにも対応しています。
 
 ## ブックマークレットの使い方
 
@@ -60,6 +62,10 @@ pnpm run build
 画面下部へ表示するバージョン番号には `package.json` の `version` が使用され、ビルド時に自動で挿入されます。
 
 ## 更新履歴
+
+### [2026/07/30] v0.0.2
+
+- Misskeyのチャンネル投稿画面に対応
 
 ### [2026/07/30] v0.0.1
 

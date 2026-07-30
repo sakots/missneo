@@ -547,29 +547,34 @@
 
   function findNoteTarget(): HTMLElement | null {
     const active = document.activeElement;
-    if (active instanceof HTMLElement && isEditable(active) && isVisible(active)) {
-      return active;
-    }
-
-    const misskeyPostForm = document.querySelector<HTMLElement>(
-      'textarea[data-testid="post-form-text"]',
-    );
-    if (misskeyPostForm && isVisible(misskeyPostForm)) {
-      return misskeyPostForm;
-    }
-
     const candidates = Array.from(
       document.querySelectorAll<HTMLElement>(
         'textarea:not([disabled]):not([readonly]), [contenteditable="true"], [role="textbox"]',
       ),
     ).filter((element) => isEditable(element) && isVisible(element));
 
-    candidates.sort((left, right) => scoreNoteTarget(right) - scoreNoteTarget(left));
+    if (
+      active instanceof HTMLElement &&
+      isEditable(active) &&
+      isVisible(active) &&
+      !candidates.includes(active)
+    ) {
+      candidates.push(active);
+    }
+
+    candidates.sort(
+      (left, right) =>
+        scoreNoteTarget(right, active) - scoreNoteTarget(left, active),
+    );
     return candidates[0] ?? null;
   }
 
-  function scoreNoteTarget(element: HTMLElement): number {
+  function scoreNoteTarget(
+    element: HTMLElement,
+    active: Element | null,
+  ): number {
     let score = 0;
+    const postForm = findPostForm(element);
     const hint = [
       element.getAttribute("placeholder"),
       element.getAttribute("aria-label"),
@@ -578,14 +583,48 @@
       .filter(Boolean)
       .join(" ");
 
+    if (element === active) score += 120;
     if (element.closest('[role="dialog"], dialog')) score += 100;
-    if (element.matches('[data-testid="post-form-text"]')) score += 300;
+    if (element.matches('[data-testid="post-form-text"]')) score += 400;
+    if (postForm) score += 150;
+    if (isChannelPostForm(postForm)) score += 1000;
+    if (isChannelPage() && postForm) score += 200;
     if (element instanceof HTMLTextAreaElement) score += 50;
     if (/お考え|ノート|note|mind|投稿|post/i.test(hint)) score += 80;
 
     const rect = element.getBoundingClientRect();
     score += Math.min((rect.width * rect.height) / 1000, 50);
     return score;
+  }
+
+  function findPostForm(element: HTMLElement): HTMLElement | null {
+    let current = element.parentElement;
+    while (current && current !== document.body) {
+      if (
+        current.classList.contains("post-form") ||
+        current.querySelector('[data-testid="post-form-submit"]') ||
+        current.querySelector("button:disabled .ti-device-tv")
+      ) {
+        return current;
+      }
+      current = current.parentElement;
+    }
+    return null;
+  }
+
+  function isChannelPostForm(postForm: HTMLElement | null): boolean {
+    if (!postForm) {
+      return false;
+    }
+
+    return (
+      (isChannelPage() && postForm.classList.contains("post-form")) ||
+      Boolean(postForm.querySelector("button:disabled .ti-device-tv"))
+    );
+  }
+
+  function isChannelPage(): boolean {
+    return /^\/channels\/[^/]+/.test(window.location.pathname);
   }
 
   function isEditable(element: HTMLElement): boolean {
