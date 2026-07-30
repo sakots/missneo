@@ -29,6 +29,7 @@
     fullScreen?: boolean;
     init(): boolean;
     start(): void;
+    resizeCanvas?(): void;
     setStabilizeLevel?(level: number): void;
     updateWindow?(): void;
   }
@@ -208,6 +209,12 @@
       state.close();
     }
   });
+  window.addEventListener("resize", () => {
+    if (!currentNeo?.fullScreen) {
+      return;
+    }
+    window.requestAnimationFrame(() => currentNeo?.resizeCanvas?.());
+  });
 
   sizeForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -252,6 +259,7 @@
 
     resizeButton.disabled = true;
     currentNeo = null;
+    panel.classList.remove("missneo-window-mode");
     currentFrame?.remove();
     currentFrame = null;
     loading.hidden = false;
@@ -363,6 +371,13 @@
         state.close();
       }
     });
+    let frameNeo: NeoApi | null = null;
+    frameDocument.addEventListener("neo:fullscreenchange", (event) => {
+      const fullscreen = Boolean(
+        (event as CustomEvent<{ fullscreen?: boolean }>).detail?.fullscreen,
+      );
+      setNeoWindowMode(frame, frameNeo, fullscreen);
+    });
 
     try {
       const [neo] = await Promise.all([
@@ -384,6 +399,7 @@
         throw new Error("PaintBBS NEO の描画領域を初期化できませんでした。");
       }
 
+      frameNeo = neo;
       neo.start();
       neo.setStabilizeLevel?.(1);
       return { frame, neo };
@@ -455,6 +471,21 @@
 
     neo.fullScreen = false;
     neo.updateWindow?.();
+  }
+
+  function setNeoWindowMode(
+    frame: HTMLIFrameElement,
+    neo: NeoApi | null,
+    fullscreen: boolean,
+  ): void {
+    panel.classList.toggle("missneo-window-mode", fullscreen);
+    frame.classList.toggle("missneo-frame-window", fullscreen);
+
+    window.requestAnimationFrame(() => {
+      if (frame.isConnected) {
+        neo?.resizeCanvas?.();
+      }
+    });
   }
 
   function nextAnimationFrame(): Promise<void> {
@@ -728,6 +759,11 @@
         box-shadow: 0 24px 80px rgb(0 0 0 / 45%);
       }
 
+      #missneo-panel.missneo-window-mode {
+        width: 100%;
+        height: calc(100dvh - 24px);
+      }
+
       #missneo-header {
         display: flex;
         align-items: center;
@@ -848,6 +884,15 @@
         background: #11181c;
       }
 
+      #missneo-panel.missneo-window-mode #missneo-viewport {
+        overflow: hidden;
+      }
+
+      #missneo-viewport > .missneo-frame-window {
+        width: 100% !important;
+        height: 100% !important;
+      }
+
       #missneo-loading {
         display: grid;
         position: absolute;
@@ -926,6 +971,10 @@
           max-height: 100dvh;
           border: 0;
           border-radius: 0;
+        }
+
+        #missneo-panel.missneo-window-mode {
+          height: 100dvh;
         }
 
         #missneo-header {
