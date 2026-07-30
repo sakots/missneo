@@ -4,6 +4,8 @@
 
 ## 何
 
+![できた](images/about.png)
+
 misskeyにPaintBBS NEOでお絵描きするブックマークレットです。
 
 PaintBBS NEO: [funige/neo](https://github.com/funige/neo/tree/master)
