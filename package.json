@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/inject-version.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.json --noEmit"
+    "test": "tsc -p tsconfig.json --noEmit",
+    "test:local": "python3 -m http.server 4173"
   },
   "keywords": [],
   "author": "",

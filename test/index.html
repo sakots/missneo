@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>missneo ローカルテスト</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #172126;
+        color: #e8eef2;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        padding: 32px 16px;
+        background:
+          radial-gradient(circle at top, #2c3e46 0, transparent 480px),
+          #172126;
+      }
+
+      main {
+        width: min(100%, 720px);
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 24px;
+      }
+
+      .description {
+        margin: 0 0 24px;
+        color: #afbdc4;
+        line-height: 1.7;
+      }
+
+      .toolbar,
+      .post-form {
+        border: 1px solid rgb(255 255 255 / 12%);
+        border-radius: 16px;
+        background: #202a2f;
+        box-shadow: 0 18px 50px rgb(0 0 0 / 20%);
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+        padding: 14px;
+      }
+
+      .toolbar label {
+        color: #afbdc4;
+        font-size: 13px;
+      }
+
+      select,
+      button,
+      textarea {
+        font: inherit;
+      }
+
+      select,
+      button {
+        min-height: 38px;
+        border: 1px solid rgb(255 255 255 / 15%);
+        border-radius: 9px;
+      }
+
+      select {
+        padding: 0 32px 0 12px;
+        background: #11191d;
+        color: #e8eef2;
+      }
+
+      button {
+        padding: 0 16px;
+        background: #8ac900;
+        color: #172000;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button:hover,
+      button:focus-visible {
+        filter: brightness(1.08);
+      }
+
+      #secure-context {
+        margin-left: auto;
+        font-size: 12px;
+      }
+
+      #secure-context[data-kind="success"] {
+        color: #9edb5a;
+      }
+
+      #secure-context[data-kind="error"] {
+        color: #ff9b9b;
+      }
+
+      .post-form {
+        padding: 20px;
+      }
+
+      .post-form h2 {
+        margin: 0 0 14px;
+        font-size: 17px;
+      }
+
+      textarea {
+        display: block;
+        width: 100%;
+        min-height: 130px;
+        resize: vertical;
+        padding: 14px;
+        border: 1px solid rgb(255 255 255 / 15%);
+        border-radius: 10px;
+        outline: none;
+        background: #11191d;
+        color: #e8eef2;
+      }
+
+      textarea:focus {
+        border-color: #8ac900;
+        box-shadow: 0 0 0 2px rgb(138 201 0 / 18%);
+      }
+
+      .post-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 12px;
+      }
+
+      .channel-indicator {
+        opacity: 0.65;
+      }
+
+      #paste-result {
+        min-height: 26px;
+        margin: 18px 0 0;
+        color: #afbdc4;
+      }
+
+      #image-preview {
+        display: none;
+        max-width: 100%;
+        max-height: 480px;
+        margin-top: 12px;
+        border-radius: 12px;
+        background: white;
+      }
+
+      #image-preview[data-visible="true"] {
+        display: block;
+      }
+
+      code {
+        padding: 2px 5px;
+        border-radius: 4px;
+        background: #10171b;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>missneo ローカルテスト</h1>
+      <p class="description">
+        下のボタンで <code>../missneo.js</code> を読み込みます。絵を描いて
+        NEOの「投稿」を押すと、自動貼り付けされたPNGが下に表示されます。
+      </p>
+
+      <div class="toolbar">
+        <label for="test-mode">投稿画面</label>
+        <select id="test-mode">
+          <option value="note">通常のノート</option>
+          <option value="channel">チャンネル</option>
+        </select>
+        <button id="open-missneo" type="button">お絵描きを開く</button>
+        <span id="secure-context"></span>
+      </div>
+
+      <section class="post-form" id="mock-post-form">
+        <h2 id="form-title">通常のノート作成画面</h2>
+        <textarea
+          id="note-text"
+          data-testid="post-form-text"
+          placeholder="いまどうしてる？"
+          aria-label="ノート本文"
+        ></textarea>
+        <div class="post-actions">
+          <button id="channel-indicator" class="channel-indicator" type="button" hidden disabled>
+            <span id="channel-icon">チャンネル投稿</span>
+          </button>
+        </div>
+        <p id="paste-result" role="status" aria-live="polite">
+          まだ画像は貼り付けられていません。
+        </p>
+        <img id="image-preview" alt="貼り付けられた画像のプレビュー" />
+      </section>
+    </main>
+
+    <script>
+      const modeSelect = document.querySelector("#test-mode");
+      const openButton = document.querySelector("#open-missneo");
+      const formTitle = document.querySelector("#form-title");
+      const channelIndicator = document.querySelector("#channel-indicator");
+      const channelIcon = document.querySelector("#channel-icon");
+      const noteText = document.querySelector("#note-text");
+      const result = document.querySelector("#paste-result");
+      const preview = document.querySelector("#image-preview");
+      const secureContext = document.querySelector("#secure-context");
+      let previewUrl = null;
+
+      secureContext.textContent = window.isSecureContext
+        ? "Clipboard API: 利用可能"
+        : "Clipboard API: 利用不可";
+      secureContext.dataset.kind = window.isSecureContext ? "success" : "error";
+
+      modeSelect.addEventListener("change", () => {
+        const isChannel = modeSelect.value === "channel";
+        formTitle.textContent = isChannel
+          ? "チャンネル投稿画面"
+          : "通常のノート作成画面";
+        channelIndicator.hidden = !isChannel;
+        channelIcon.classList.toggle("ti-device-tv", isChannel);
+        noteText.placeholder = isChannel
+          ? "チャンネルに投稿..."
+          : "いまどうしてる？";
+        history.replaceState(
+          null,
+          "",
+          isChannel ? "/channels/local-test" : "/test/index.html",
+        );
+        noteText.focus();
+      });
+
+      openButton.addEventListener("click", () => {
+        noteText.focus();
+
+        const script = document.createElement("script");
+        script.src = `../missneo.js?${Date.now()}`;
+        script.addEventListener("error", () => {
+          result.textContent =
+            "missneo.jsを読み込めませんでした。リポジトリ直下をルートにしてローカルサーバーを起動してください。";
+        });
+        document.head.append(script);
+      });
+
+      noteText.addEventListener("paste", (event) => {
+        const image = Array.from(event.clipboardData?.files ?? []).find(
+          (file) => file.type === "image/png",
+        );
+        if (!image) {
+          return;
+        }
+
+        event.preventDefault();
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+        }
+        previewUrl = URL.createObjectURL(image);
+        preview.src = previewUrl;
+        preview.dataset.visible = "true";
+        result.textContent =
+          `貼り付け成功: ${image.name} (${Math.round(image.size / 1024)} KB)`;
+      });
+
+      window.addEventListener("beforeunload", () => {
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+        }
+      });
+    </script>
+  </body>
+</html>
