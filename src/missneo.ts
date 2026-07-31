@@ -31,6 +31,7 @@
     init(): boolean;
     start(): void;
     resizeCanvas?(): void;
+    setColor?(color: string): void;
     setStabilizeLevel?(level: number): void;
     updateWindow?(): void;
   }
@@ -180,10 +181,26 @@
   version.id = "missneo-version";
   version.textContent = `missneo v${MISSNEO_VERSION}`;
 
+  const footerControls = document.createElement("div");
+  footerControls.id = "missneo-footer-controls";
+
+  const colorLabel = document.createElement("label");
+  colorLabel.htmlFor = "missneo-palette-color";
+  colorLabel.textContent = "パレット色";
+
+  const colorInput = document.createElement("input");
+  colorInput.id = "missneo-palette-color";
+  colorInput.type = "color";
+  colorInput.value = "#000000";
+  colorInput.title = "選択中のパレットへ色を入れる";
+  colorInput.setAttribute("aria-label", "選択中のパレットへ入れる色");
+  colorInput.disabled = true;
+
   heading.append(title, sizeForm);
   header.append(heading, closeButton);
   viewport.append(loading);
-  footer.append(status, version);
+  footerControls.append(colorLabel, colorInput, version);
+  footer.append(status, footerControls);
   panel.append(header, viewport, footer);
   overlay.append(panel);
   document.body.append(overlay);
@@ -269,6 +286,9 @@
   stabilizeSelect.addEventListener("change", () => {
     currentNeo?.setStabilizeLevel?.(getStabilizeLevel());
   });
+  colorInput.addEventListener("input", () => {
+    currentNeo?.setColor?.(colorInput.value);
+  });
 
   void mountNeo(DEFAULT_CANVAS_WIDTH, DEFAULT_CANVAS_HEIGHT);
 
@@ -281,6 +301,7 @@
     const appletHeight = canvasHeight + 160;
 
     resizeButton.disabled = true;
+    colorInput.disabled = true;
     currentNeo = null;
     panel.classList.remove("missneo-window-mode");
     currentFrame?.remove();
@@ -315,6 +336,7 @@
       loading.hidden = true;
       frame.style.visibility = "visible";
       resizeButton.disabled = false;
+      colorInput.disabled = false;
       setStatus(
         "描き終えたら NEO の「投稿」を押してください。PNG をノートへ渡します。",
         "info",
@@ -327,6 +349,7 @@
       loading.textContent = messageFromError(error);
       loading.dataset.kind = "error";
       resizeButton.disabled = false;
+      colorInput.disabled = true;
       setStatus(
         "読み込みに失敗しました。ネットワーク接続を確認して、ページを再読み込みしてください。",
         "error",
@@ -425,6 +448,7 @@
       frameNeo = neo;
       neo.start();
       neo.setStabilizeLevel?.(getStabilizeLevel());
+      neo.setColor?.(colorInput.value);
       return { frame, neo };
     } catch (error) {
       frame.remove();
@@ -1018,6 +1042,40 @@
         white-space: nowrap;
       }
 
+      #missneo-footer-controls {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 7px;
+      }
+
+      #missneo-footer-controls label {
+        color: #9fb0b9;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      #missneo-palette-color {
+        width: 34px;
+        height: 28px;
+        padding: 2px;
+        border: 1px solid rgb(255 255 255 / 18%);
+        border-radius: 7px;
+        outline: none;
+        background: #10171b;
+        cursor: pointer;
+      }
+
+      #missneo-palette-color:focus-visible {
+        border-color: #8ac900;
+        box-shadow: 0 0 0 2px rgb(138 201 0 / 20%);
+      }
+
+      #missneo-palette-color:disabled {
+        cursor: wait;
+        opacity: 0.55;
+      }
+
       #missneo-status[data-kind="success"] {
         color: #93e7b0;
       }
@@ -1078,6 +1136,10 @@
 
         #missneo-size-form input {
           width: 62px;
+        }
+
+        #missneo-footer {
+          flex-wrap: wrap;
         }
       }
     `;
