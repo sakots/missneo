@@ -771,7 +771,7 @@
       };
 
       const script = frameDocument.createElement("script");
-      script.src = NEO_SCRIPT_URL;
+      script.src = `${NEO_SCRIPT_URL}?t=${Date.now()}`;
       script.charset = "UTF-8";
       script.addEventListener("load", handleLoad, { once: true });
       script.addEventListener("error", handleError, { once: true });
