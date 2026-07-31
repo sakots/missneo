@@ -57,10 +57,10 @@
     const resizeButton = document.createElement("button");
     resizeButton.id = "missneo-resize";
     resizeButton.type = "submit";
-    resizeButton.textContent = "変更";
+    resizeButton.textContent = "サイズ変更";
     const stabilizeLabel = document.createElement("label");
     stabilizeLabel.htmlFor = "missneo-stabilize";
-    stabilizeLabel.textContent = "補正";
+    stabilizeLabel.textContent = "手ぶれ補正";
     stabilizeLabel.title = "手ぶれ補正";
     const stabilizeSelect = document.createElement("select");
     stabilizeSelect.id = "missneo-stabilize";
