@@ -9,6 +9,7 @@
     const DEFAULT_CANVAS_HEIGHT = 400;
     const MIN_CANVAS_SIZE = 100;
     const MAX_CANVAS_SIZE = 2000;
+    const DEFAULT_STABILIZE_LEVEL = 0;
     const MISSNEO_VERSION = "0.0.2";
     const missNeoWindow = window;
     const existingState = missNeoWindow[STATE_KEY];
@@ -57,7 +58,22 @@
     resizeButton.id = "missneo-resize";
     resizeButton.type = "submit";
     resizeButton.textContent = "変更";
-    sizeForm.append(widthLabel, widthInput, separator, heightLabel, heightInput, resizeButton);
+    const stabilizeLabel = document.createElement("label");
+    stabilizeLabel.htmlFor = "missneo-stabilize";
+    stabilizeLabel.textContent = "補正";
+    stabilizeLabel.title = "手ぶれ補正";
+    const stabilizeSelect = document.createElement("select");
+    stabilizeSelect.id = "missneo-stabilize";
+    stabilizeSelect.title = "手ぶれ補正";
+    stabilizeSelect.setAttribute("aria-label", "手ぶれ補正");
+    for (let level = 0; level <= 5; level++) {
+        const option = document.createElement("option");
+        option.value = String(level);
+        option.textContent = String(level);
+        option.selected = level === DEFAULT_STABILIZE_LEVEL;
+        stabilizeSelect.append(option);
+    }
+    sizeForm.append(widthLabel, widthInput, separator, heightLabel, heightInput, resizeButton, stabilizeLabel, stabilizeSelect);
     const closeButton = document.createElement("button");
     closeButton.id = "missneo-close";
     closeButton.type = "button";
@@ -148,6 +164,9 @@
             return;
         }
         void mountNeo(canvasWidth, canvasHeight);
+    });
+    stabilizeSelect.addEventListener("change", () => {
+        currentNeo?.setStabilizeLevel?.(getStabilizeLevel());
     });
     void mountNeo(DEFAULT_CANVAS_WIDTH, DEFAULT_CANVAS_HEIGHT);
     async function mountNeo(canvasWidth, canvasHeight) {
@@ -260,7 +279,7 @@
             }
             frameNeo = neo;
             neo.start();
-            neo.setStabilizeLevel?.(1);
+            neo.setStabilizeLevel?.(getStabilizeLevel());
             return { frame, neo };
         }
         catch (error) {
@@ -471,6 +490,12 @@
             : `${MIN_CANVAS_SIZE}〜${MAX_CANVAS_SIZE}の整数を入力してください。`);
         return isValid ? value : null;
     }
+    function getStabilizeLevel() {
+        const value = Number.parseInt(stabilizeSelect.value, 10);
+        return Number.isInteger(value) && value >= 0 && value <= 5
+            ? value
+            : DEFAULT_STABILIZE_LEVEL;
+    }
     function createFileName() {
         const now = new Date();
         const twoDigits = (value) => String(value).padStart(2, "0");
@@ -625,7 +650,7 @@
       #missneo-size-form {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 5px;
       }
 
       #missneo-size-form label {
@@ -634,7 +659,7 @@
       }
 
       #missneo-size-form input {
-        width: 72px;
+        width: 64px;
         padding: 6px 7px;
         box-sizing: border-box;
         border: 1px solid rgb(255 255 255 / 18%);
@@ -652,13 +677,31 @@
         box-shadow: 0 0 0 2px rgb(138 201 0 / 20%);
       }
 
+      #missneo-size-form select {
+        width: 44px;
+        padding: 6px 5px;
+        box-sizing: border-box;
+        border: 1px solid rgb(255 255 255 / 18%);
+        border-radius: 7px;
+        outline: none;
+        background: #10171b;
+        color: #edf5f8;
+        font: inherit;
+        font-size: 13px;
+      }
+
+      #missneo-size-form select:focus {
+        border-color: #8ac900;
+        box-shadow: 0 0 0 2px rgb(138 201 0 / 20%);
+      }
+
       #missneo-size-separator {
         color: #82939b;
         font-size: 12px;
       }
 
       #missneo-resize {
-        padding: 6px 10px;
+        padding: 6px 8px;
         border: 0;
         border-radius: 7px;
         background: #8ac900;
