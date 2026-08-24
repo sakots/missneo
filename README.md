@@ -18,8 +18,10 @@ PaintBBS NEO: [funige/neo](https://github.com/funige/neo/tree/master)
 misskeyのノートする画面を呼び出し、以下のブックマークレットを起動します。
 
 ```javascript
-javascript:(function(){const s=document.createElement('script');s.charset='UTF-8';s.src='https://neo.sakots.net/missneo.js?'+Date.now();document.head.appendChild(s);})();
+javascript:(async()=>{const c=new AbortController(),t=setTimeout(()=>c.abort(),10000);try{const r=await fetch('https://api.github.com/repos/sakots/missneo/contents/missneo.js?ref=main&t='+Date.now(),{cache:'no-store',headers:{Accept:'application/vnd.github.raw+json'},signal:c.signal});if(!r.ok)throw new Error('HTTP '+r.status);const u=URL.createObjectURL(new Blob([await r.text()],{type:'text/javascript;charset=UTF-8'})),s=document.createElement('script');s.src=u;s.onload=s.onerror=()=>URL.revokeObjectURL(u);document.head.appendChild(s)}catch(e){alert('missneo.jsをGitHubから読み込めませんでした。')}finally{clearTimeout(t)}})();
 ```
+
+ブックマークレット自身がGitHub APIから `sakots/missneo` の `main` ブランチにある `missneo.js` を直接読み込みます。
 
 1. Misskeyでノート作成画面を開きます。
 2. ブックマークレットを起動すると、400×400pxのPaintBBS NEOが開きます。
@@ -76,11 +78,15 @@ pnpm run test:local
 
 ## 更新履歴
 
+### [2026/08/24] v0.1.1
+
+- PaintBBS NEOのJavaScriptをGitHub APIからキャッシュせず読み込み、失敗時は既存URLへ切り替えるように変更
+- ブックマークレットからGitHub API上のmissneo.jsを直接読み込むように変更
+
 ### [2026/07/31] v0.1.0
 
 - 描画画面上部に手ぶれ補正（0〜5、デフォルト0）を追加
 - カラーピッカーから選択中のNEOパレットへ色を入れる機能を追加
-- PaintBBS NEOのJavaScriptをキャッシュせず読み込むように変更
 
 ### [2026/07/30] v0.0.2
 

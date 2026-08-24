@@ -1,8 +1,10 @@
 "use strict";
 (() => {
     "use strict";
+    const NEO_GITHUB_API_URL = "https://api.github.com/repos/funige/neo/contents/dist/neo.js";
     const NEO_SCRIPT_URL = "https://neo.sakots.net/neo/dist/neo.js";
     const NEO_STYLE_URL = "https://neo.sakots.net/neo/dist/neo.css";
+    const NEO_LOAD_TIMEOUT_MS = 10000;
     const STATE_KEY = "__missneoState__";
     const APP_STYLE_ID = "missneo-style";
     const DEFAULT_CANVAS_WIDTH = 400;
@@ -10,7 +12,7 @@
     const MIN_CANVAS_SIZE = 100;
     const MAX_CANVAS_SIZE = 2000;
     const DEFAULT_STABILIZE_LEVEL = 0;
-    const MISSNEO_VERSION = "0.1.0";
+    const MISSNEO_VERSION = "0.1.1";
     const missNeoWindow = window;
     const existingState = missNeoWindow[STATE_KEY];
     if (existingState) {
@@ -531,9 +533,46 @@
             ".png",
         ].join("");
     }
-    function loadNeoInFrame(frameDocument, frameWindow) {
+    async function loadNeoInFrame(frameDocument, frameWindow) {
+        try {
+            const source = await fetchNeoSourceFromGitHub();
+            const sourceUrl = URL.createObjectURL(new Blob([source], { type: "text/javascript;charset=UTF-8" }));
+            return await loadNeoScriptElement(frameDocument, frameWindow, sourceUrl, () => URL.revokeObjectURL(sourceUrl));
+        }
+        catch (error) {
+            console.warn("GitHub APIからPaintBBS NEOを読み込めなかったため、既存URLへ切り替えます。", error);
+            return loadNeoScriptElement(frameDocument, frameWindow, `${NEO_SCRIPT_URL}?t=${Date.now()}`);
+        }
+    }
+    async function fetchNeoSourceFromGitHub() {
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), NEO_LOAD_TIMEOUT_MS);
+        try {
+            const apiUrl = new URL(NEO_GITHUB_API_URL);
+            apiUrl.searchParams.set("ref", "master");
+            apiUrl.searchParams.set("t", String(Date.now()));
+            const response = await fetch(apiUrl, {
+                cache: "no-store",
+                headers: { Accept: "application/vnd.github.raw+json" },
+                signal: controller.signal,
+            });
+            if (!response.ok) {
+                throw new Error(`GitHub APIがHTTP ${response.status}を返しました。`);
+            }
+            const source = await response.text();
+            if (!source.trim()) {
+                throw new Error("GitHub APIが空のJavaScriptを返しました。");
+            }
+            return source;
+        }
+        finally {
+            window.clearTimeout(timeout);
+        }
+    }
+    function loadNeoScriptElement(frameDocument, frameWindow, sourceUrl, cleanup) {
         return new Promise((resolve, reject) => {
             const handleLoad = () => {
+                cleanup?.();
                 const neo = frameWindow.Neo;
                 if (isNeoApi(neo)) {
                     resolve(neo);
@@ -543,10 +582,11 @@
                 }
             };
             const handleError = () => {
+                cleanup?.();
                 reject(new Error("PaintBBS NEO のスクリプトを読み込めませんでした。"));
             };
             const script = frameDocument.createElement("script");
-            script.src = `${NEO_SCRIPT_URL}?t=${Date.now()}`;
+            script.src = sourceUrl;
             script.charset = "UTF-8";
             script.addEventListener("load", handleLoad, { once: true });
             script.addEventListener("error", handleError, { once: true });
